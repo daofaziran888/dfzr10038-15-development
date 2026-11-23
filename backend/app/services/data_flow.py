@@ -623,6 +623,49 @@ def flow_schedule_to_batch_to_backfill(schedule_job_id: int) -> list[FlowEffect]
     return effects
 
 
+# ============================ 链路11: 分层派发→标注任务→标注待办 ============================
+
+
+@_register(
+    "strata_dispatch/批量派发 → label_task/派发任务 → label_todo/生成待办",
+    desc="分层派发按真实身份领取后，领取结果落到标注任务并同步生成标注待办。",
+)
+def flow_strata_to_label_to_todo(dispatch_id: int) -> list[FlowEffect]:
+    """只报告领取已经落下的下游记录，不重复创建任务或待办。"""
+    effects: list[FlowEffect] = []
+    dispatch = store.find("strata_dispatch", dispatch_id)
+    if dispatch is None:
+        return effects
+
+    claims = [
+        row
+        for row in store.rows("_strata_claims")
+        if int(row.get("派发ID", 0)) == dispatch_id and row.get("状态") == "有效"
+    ]
+    if not claims:
+        return effects
+    claim = max(claims, key=lambda row: int(row.get("id", 0)))
+    task_no = str(claim.get("标注任务", ""))
+    todo_no = str(claim.get("待办编号", ""))
+
+    for task in store.rows("label_task"):
+        if str(task.get("任务编号")) == task_no:
+            effects.append(FlowEffect(
+                "派发任务", "label_task", int(task.get("id", 0)),
+                f"分层派发 {dispatch.get('派发编号')} 领取 {claim.get('领取编号')} "
+                f"生成标注任务 {task_no}，样本范围 {task.get('样本范围')}",
+            ))
+            break
+    for todo in store.rows("label_todo"):
+        if str(todo.get("待办编号")) == todo_no:
+            effects.append(FlowEffect(
+                "生成待办", "label_todo", int(todo.get("id", 0)),
+                f"领取 {claim.get('领取编号')} 同步标注待办 {todo_no} 给 {claim.get('值班员')}",
+            ))
+            break
+    return effects
+
+
 # ---------------------------------------------------------------------------
 # 链路路由表：根据 (action_module, action_name, status) 找到下游链路
 # ---------------------------------------------------------------------------

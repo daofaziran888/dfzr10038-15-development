@@ -55,7 +55,9 @@ npm run dev
 | 时间窗口 | `time_window` | 窗口模板 | 模板编号、窗口类型、窗口宽度 |
 | 特征回溯 | `backfill_job` | 回溯任务 | 任务编号、目标特征、起始日期 |
 | 样本分层 | `sample_strata` | 分层策略 | 策略编号、特征范围、分层字段 |
+| 分层派发 | `strata_dispatch` | 派发批次 | 派发编号、采样策略、配额、层归属 |
 | 标注派发 | `label_task` | 标注任务 | 任务编号、样本范围、标注类型 |
+| 标注待办 | `label_todo` | 标注待办 | 待办编号、标注任务、值班员 |
 | 标注审核 | `label_review` | 审核批次 | 批次编号、标注任务、审核人 |
 | 一致性计算 | `consent_calc` | 一致性报告 | 报告编号、标注任务、评估指标 |
 | 特征存储 | `feature_store` | 存储配置 | 配置编号、特征列表、存储引擎 |
@@ -72,6 +74,32 @@ npm run dev
 | 特征报告 | `report_task` | 分析报表 | 报告编号、报告类型、特征范围 |
 | 调度编排 | `schedule_job` | 调度计划 | 计划编号、任务类型、关联对象 |
 | 治理审计 | `govern_audit` | 审计记录 | 记录编号、审计对象、审计类型 |
+
+## 分层派发（多分层出样的配额分配）
+
+同一批样本往往由多个分层策略共同出样，一个用户可能同时在多个层里。分层派发按
+真实身份去重后切片，规则落在 `backend/app/strata_rules.py`（纯计算）和
+`backend/app/services/strata_dispatch.py`（落库与状态）两处：
+
+- 候选记录按 `(策略, 层, 用户)` 保存，样本始终保留全部来源层；
+- 派发以用户为单位整组进出同一个标注任务，不拆散观察关系；
+- 配额默认按身份数计，也可用 `层配额` 给每个来源层单独限流；
+- 后补名额只增不减，且始终按“配额 − 已派发”核算剩余；
+- 同一用户同时只允许一个有效领取，重复提交按 `token` 幂等；
+- 领取失效会释放候选、回退已派发计数，重复失效不会二次回退；
+- 每次有效领取生成标注任务（批次编号、样本范围、采样策略出处）并同步标注待办。
+
+相关接口：
+
+```text
+GET  /api/strata_dispatch/{id}/candidates   候选明细 + 领取 + 待办
+GET  /api/strata_dispatch/{id}/summary      配额、层归属、独立标注数
+POST /api/strata_dispatch/{id}/claims       领取/批量派发（claimant、count、token）
+POST /api/strata_dispatch/{id}/void-claim   标记领取失效
+POST /api/strata_dispatch/{id}/top-up       后补名额（总量或增量、按层增量）
+```
+
+`POST /api/strata_dispatch/{id}/actions` 支持页面动作：批量派发、补充名额、失效领取、关闭派发。
 
 ## 约定
 

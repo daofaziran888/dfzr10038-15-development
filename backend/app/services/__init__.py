@@ -7,7 +7,9 @@ from app.services.derive_rule import DeriveRuleService
 from app.services.time_window import TimeWindowService
 from app.services.backfill_job import BackfillJobService
 from app.services.sample_strata import SampleStrataService
+from app.services.strata_dispatch import StrataDispatchService
 from app.services.label_task import LabelTaskService
+from app.services.label_todo import LabelTodoService
 from app.services.label_review import LabelReviewService
 from app.services.consent_calc import ConsentCalcService
 from app.services.feature_store import FeatureStoreService
@@ -31,7 +33,9 @@ SERVICES: dict[str, BaseModuleService] = {
     "time_window": TimeWindowService(),
     "backfill_job": BackfillJobService(),
     "sample_strata": SampleStrataService(),
+    "strata_dispatch": StrataDispatchService(),
     "label_task": LabelTaskService(),
+    "label_todo": LabelTodoService(),
     "label_review": LabelReviewService(),
     "consent_calc": ConsentCalcService(),
     "feature_store": FeatureStoreService(),
